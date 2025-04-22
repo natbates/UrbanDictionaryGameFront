@@ -1,0 +1,54 @@
+:root
+{
+    --primary-colour: #000000;
+    --background-colour: #ffffff;
+    --text-colour: #000000;
+}
+
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+@font-face {
+    font-family: "main";
+    src: url("/public/fonts/Metropolis-Regular.otf");
+}
+  
+html {
+    font-family: "main";
+    background-color: var(--background-colour);
+    color: var(--text-colour);
+    scroll-behavior: smooth;
+}
+
+a, button
+{
+    color: var(--text-colour);
+}
+  
+body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+  
+  /* Utility for layout */
+.page-container {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    justify-content: center;
+    align-items: center;
+  }
+  
+.page-content {
+    flex: 1;
+    padding: 2rem;
+    max-width: 1000px;
+    margin: 50px auto;
+    width: 100%;
+  }
+  

@@ -1,0 +1,15 @@
+
+
+.footer
+{
+    background-color: rgba(128, 128, 128, 0.076);
+    width: 100%;
+    padding: 20px 10px;
+    display: flex;
+    gap: 20px;
+}
+
+.footer a
+{
+    text-decoration: none;
+}

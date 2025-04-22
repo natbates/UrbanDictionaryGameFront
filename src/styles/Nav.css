@@ -1,0 +1,22 @@
+.nav-bar
+{
+    position: fixed;
+    top: 0;
+    left: 0;
+    border-bottom: 3px solid var(--primary-colour);
+    width: 100%;
+    padding: 10px 20px;
+    display: flex;
+}
+
+.nav-links
+{
+    display: flex;
+    gap: 20px;
+}
+
+.nav-links a
+{
+    text-decoration: none;
+    font-size: 1.4rem;
+}
