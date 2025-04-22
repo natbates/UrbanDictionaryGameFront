@@ -18,11 +18,21 @@ const Lobby = () => {
   const [gameStarted, setGameStarted] = useState(false);
   const [round, setRound] = useState(0);
   const [phase, setPhase] = useState(0);
-  const [wordOptions, setWordOptions] = useState([]);
-  const [selectedWord, setSelectedWord] = useState(null);
 
   const [messages, setMessages] = useState([]); // Store chat messages
   const [chatInput, setChatInput] = useState(""); // Input for new messages
+  const [leaderId, setLeaderId] = useState(null);
+
+  const [hasSubmitted, setHasSubmitted] = useState(false); // Track if the player has submitted an answer
+  const [allSubmitted, setAllSubmitted] = useState(false); // Track if all players have submitted answers
+  const [prompt, setPrompt] = useState("");
+  const [isJudge, setIsJudge] = useState(false);
+  const [judgeName, setJudgeName] = useState("");
+  const [submissions, setSubmissions] = useState([]);
+  const [isPicking, setIsPicking] = useState(false);
+  const [winner, setWinner] = useState(null);
+  const [scores, setScores] = useState({});
+  const [answer, setAnswer] = useState("");
 
 
   useEffect(() => {
@@ -59,13 +69,41 @@ const Lobby = () => {
     });
 
     socket.on("game-started", (gameState) => {
-        console.log("🎮 Game started with state:", gameState);
-        // Set round and phase
-        setRound(gameState.round);
-        setPhase(gameState.phase);
-        setGameStarted(true);
-        // Display word options
-        setWordOptions(gameState.wordOptions);
+      console.log("🎮 Game started with state:", gameState);
+      // Set round and phase
+      setRound(gameState.round);
+      setPhase(gameState.phase);
+      setGameStarted(true);
+      // Reset all player states
+      setHasSubmitted(false); // Reset submission state for all players
+      setAllSubmitted(false); // Reset all submitted status
+  });
+
+    socket.on("new-round", ({ prompt, isJudge, judgeName }) => {
+      console.log(`🎲 New round started. Prompt: ${prompt}`);
+      setPrompt(prompt);
+      setIsJudge(isJudge);
+      setJudgeName(judgeName);
+      setSubmissions([]); // Clear previous submissions
+      setHasSubmitted(false); // Reset submission state for this round
+      setAllSubmitted(false); // Reset all submitted status
+    });
+  
+    socket.on("judge-pick", ({ submissions }) => {
+      console.log("👨‍⚖️ You are the judge. Submissions:", submissions);
+      setSubmissions(submissions);
+      setIsPicking(true); // Show the judge UI
+    });
+  
+    socket.on("round-results", ({ winnerName, scores }) => {
+      console.log(`🏆 ${winnerName} won the round! Scores:`, scores);
+      setWinner(winnerName);
+      setScores(scores);
+    });
+
+    socket.on("update-leader", ({ leaderId, leaderName }) => {
+      console.log(`👑 New leader is: ${leaderName} (ID: ${leaderId})`);
+      setLeaderId({ id: leaderId, name: leaderName }); // Update the leader ID in the frontend state
     });
 
     return () => {
@@ -76,8 +114,25 @@ const Lobby = () => {
       socket.off("game-started");
       socket.off("lobby-join-failed");
       socket.off("chat-message");
+      socket.off("update-leader");
+      socket.off("new-round");
+      socket.off("judge-pick");
+      socket.off("round-results");
     };
   }, []);
+
+  const handleSubmitAnswer = () => {
+    if (!answer.trim()) return;
+    socket.emit("submit-answer", { lobbyId: lobbyCode, answer });
+    setAnswer(""); // Clear the input
+    setHasSubmitted(true); // Mark that the player has submitted
+  };
+
+  const handlePickFavorite = (playerId) => {
+    console.log("👨‍⚖️ Picking favorite answer from player:", playerId);
+    socket.emit("judge-pick", { lobbyId: lobbyCode, selectedPlayerId: playerId });
+    setIsPicking(false); // Hide the judge UI
+  };
 
   const handleSendMessage = () => {
     if (chatInput.trim() === "") return; // Ignore empty messages
@@ -99,7 +154,6 @@ const Lobby = () => {
     setMessages([]); // Clear chat messages
   };
 
-  // --- CREATE ---
   const handleCreateLobby = () => {
     if (!name) {
       console.warn("⚠️ No name entered for creation");
@@ -123,7 +177,6 @@ const Lobby = () => {
     });
   };
 
-  // --- JOIN STEP 1: Check if exists ---
   const handleCheckLobby = () => {
     if (!lobbyCode) {
       console.warn("⚠️ No lobby code entered for join check");
@@ -167,7 +220,6 @@ const Lobby = () => {
     socket.once("lobby-not-found", handleNotFound);
   };
   
-  // --- JOIN STEP 2: Confirm with name ---
   const handleJoinLobby = () => {
     if (!name) {
       console.warn("⚠️ No name entered to join");
@@ -186,79 +238,135 @@ const Lobby = () => {
     socket.emit("start-game", lobbyCode);
   };
 
-  const handleWordSelection = (word) => {
-    console.log("🎯 Word selected:", word);
-    setSelectedWord(word);
-    // You can then emit this to the server to store the selected word for this player
-    socket.emit('word-selected', { lobbyId: lobbyCode, word });
+  const handleNextRound = () => {
+    console.log("➡️ Moving to the next round...");
+  
+    // Emit an event to start the next round
+    socket.emit("start-next-round", { lobbyId: lobbyCode });
+  
+    // Update the round and phase if you handle this on the client-side as well
+    setRound(prevRound => prevRound + 1);  // Increment round number
+    setPhase(0);  // Reset the phase to 0, or the appropriate starting phase
+    setWinner(null); // Reset the winner for the next round
+    setScores({});  // Reset the scores for the next round
+    setSubmissions([]); // Reset the submissions
+    setHasSubmitted(false); // Reset submission state
+    setAllSubmitted(false); // Reset all players' submissions
   };
 
   // --- IN LOBBY ---
+  useEffect(() => {
+    if (players.length > 0) {
+      const allPlayersSubmitted = players.every(player => player.hasSubmitted);
+      setAllSubmitted(allPlayersSubmitted);
+    }
+  }, [players, hasSubmitted]);
+
+  // --- IN LOBBY ---
   if (isLobbyJoined) {
-    if (gameStarted) {
-      return (
-        <div className="game-container">
-          <h2>Game in Progress</h2>
-          <h3>Round: {round}</h3>
-          <h3>Phase: {phase}</h3>
-          <h3>Word Options:</h3>
-          <ul>
-            {wordOptions.map((word, index) => (
-              <li key={index} onClick={() => handleWordSelection(word)}>{word}</li>
-            ))}
-          </ul>
-          {selectedWord && <p>You selected: {selectedWord}</p>}
-        </div>
-      );
-    } else {
     return (
       <div className="lobby-container">
-        <h2>Lobby: {lobbyCode}</h2>
-        <h3>Players:</h3>
-        <ul>
-          {players?.map((p) => (
-            <li key={p.id}>{p.name}</li>
-          ))}
-        </ul>
-        <button onClick={handleLeaveLobby}>Leave Lobby</button> {/* Add this button */}
-        {players.length > 1 && <button onClick={handleStartGame}>Start Game</button>}
-          
-        <div className="chat-box">
-          <h1>Chat</h1>
-        <div className="chat-messages">
-          {messages.map((msg, index) => (
-            <div key={index}>
-              <strong>{msg.sender}:</strong> {msg.message}
+        <div className="lobby-sidebar">
+          <h2>Lobby: {lobbyCode}</h2>
+          <div>
+            Lobby Leader: {leaderId ? (leaderId.id === socket.id ? "You" : leaderId.name) : "Loading..."}
+          </div>
+          <h3>Players:</h3>
+          <ul>
+            {players.map((player, index) => (
+              <li key={index}>
+                {player.name}: {player.score !== undefined ? player.score : "No score"}
+              </li>
+            ))}
+          </ul>
+          <button onClick={handleLeaveLobby}>Leave Lobby</button>
+          {players.length > 1 && leaderId?.id === socket?.id && <button onClick={handleStartGame}>Start Game</button>}
+          <div className="chat-box">
+            <h1>Chat</h1>
+            <div className="chat-messages">
+              {messages.map((msg, index) => (
+                <div key={index}>
+                  <strong>{msg.sender}:</strong> {msg.message}
+                </div>
+              ))}
             </div>
-          ))}
+            <div className="chat-input">
+              <input
+                type="text"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                placeholder="Type a message..."
+              />
+              <button onClick={handleSendMessage}>Send</button>
+            </div>
+          </div>
         </div>
-        <div className="chat-input">
-          <input
-            type="text"
-            value={chatInput}
-            onChange={(e) => setChatInput(e.target.value)}
-            placeholder="Type a message..."
-          />
-          <button onClick={handleSendMessage}>Send</button>
+
+        <div className="game-content">
+          {gameStarted && (
+            <div className="game-container">
+              <h2>Game in Progress</h2>
+              <h3>Round: {round}</h3>
+              <h3>Phase: {phase}</h3>
+              <h3>Judge: {judgeName}</h3>
+              {!isJudge && (
+                <div className="submission-box">
+                  <h3>Prompt: {prompt}</h3>
+                  <input
+                    type="text"
+                    value={answer}
+                    onChange={(e) => setAnswer(e.target.value)}
+                    placeholder="Write your answer..."
+                    disabled={hasSubmitted} // Disable input after submitting
+                  />
+                  <button onClick={handleSubmitAnswer} disabled={hasSubmitted}>Submit</button>
+                </div>
+              )}
+              {isPicking && isJudge && (
+                <div className="judge-box">
+                  <h3>Pick the funniest answer:</h3>
+                  {submissions.map((sub, idx) => (
+                    <div key={idx}>
+                      <p>{sub.answer}</p>
+                      <button onClick={() => handlePickFavorite(sub.playerId)}>Pick</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {winner && (
+                <div className="winner-box">
+                  <h2>🏆 {winner} won the round!</h2>
+                  <h3>Scores:</h3>
+                  <ul>
+                  {scores.map((player, index) => (
+                    <li key={index}>{player.name}: {player.score}</li>
+                  ))}
+                  </ul>
+                  {isJudge && <button onClick={handleNextRound}>Next Round</button>}
+
+                </div>
+              )}
+            </div>
+          )}
+          {!hasSubmitted && allSubmitted && (
+            <div className="waiting-for-round">
+              <h3>Waiting for the round to end...</h3>
+            </div>
+          )}
         </div>
       </div>
-          
-      </div>
-    );}
+    );
   }
 
-  // --- UI BEFORE JOIN ---
   return (
     <div className="lobby-container">
       <h2>{mode === "create" ? "Create a Lobby" : "Join a Lobby"}</h2>
-
       {!mode && (
         <div>
-          <button onClick={() => { console.log("🆕 Switching to create mode"); setMode("create"); }}>Create Lobby</button>
-          <button onClick={() => { console.log("🔑 Switching to join mode"); setMode("join"); }}>Join Lobby</button>
+          <button onClick={() => { setMode("create"); }}>Create Lobby</button>
+          <button onClick={() => { setMode("join"); }}>Join Lobby</button>
         </div>
       )}
-
       {mode === "create" && (
         <div>
           <input
@@ -268,10 +376,9 @@ const Lobby = () => {
             onChange={(e) => setName(e.target.value)}
           />
           <button onClick={handleCreateLobby}>Create</button>
-          <button onClick={() => {setMode(null); setError(null)}}>Back</button> 
+          <button onClick={() => { setMode(null); setError(null) }}>Back</button> 
         </div>
       )}
-
       {mode === "join" && !isLobbyFound && (
         <div>
           <input
@@ -281,10 +388,9 @@ const Lobby = () => {
             onChange={(e) => setLobbyCode(e.target.value.toUpperCase())}
           />
           <button onClick={handleCheckLobby}>Check Lobby</button>
-          <button onClick={() => {setMode(null); setError(null)}}>Back</button> 
+          <button onClick={() => { setMode(null); setError(null) }}>Back</button> 
         </div>
       )}
-
       {mode === "join" && lobbyCode && !isLobbyJoined && isLobbyFound && !error && (
         <div>
           <input
@@ -294,10 +400,9 @@ const Lobby = () => {
             onChange={(e) => setName(e.target.value)}
           />
           <button onClick={handleJoinLobby}>Join Lobby</button>
-          <button onClick={() => {setLobbyCode(null)}}>Back</button> 
+          <button onClick={() => { setLobbyCode(null) }}>Back</button> 
         </div>
       )}
-
       {error && <p style={{ color: "red" }}>{error}</p>}
     </div>
   );
