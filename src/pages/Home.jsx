@@ -42,7 +42,7 @@ const Home = () => {
 
   return (
     <div className="home-page">
-      <h1>Urban Dictionary Random Definition</h1>
+      {/* <h1>Urban Dictionary Random Definition</h1>
       {loading ? (
         <p>Loading...</p>
       ) : (
@@ -54,7 +54,7 @@ const Home = () => {
             {definition.author && <p><em>- {definition.author}</em></p>}
           </div>
         )
-      )}
+      )} */}
 
       <Lobby />
     

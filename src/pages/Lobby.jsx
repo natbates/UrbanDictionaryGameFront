@@ -21,6 +21,10 @@ const Lobby = () => {
   const [wordOptions, setWordOptions] = useState([]);
   const [selectedWord, setSelectedWord] = useState(null);
 
+  const [messages, setMessages] = useState([]); // Store chat messages
+  const [chatInput, setChatInput] = useState(""); // Input for new messages
+
+
   useEffect(() => {
     console.log("📡 Setting up socket listeners");
 
@@ -49,6 +53,11 @@ const Lobby = () => {
         setIsLobbyFound(true);
     });
 
+    socket.on("chat-message", ({ sender, message }) => {
+      console.log(`💬 New message from ${sender}: ${message}`);
+      setMessages((prevMessages) => [...prevMessages, { sender, message }]);
+    });
+
     socket.on("game-started", (gameState) => {
         console.log("🎮 Game started with state:", gameState);
         // Set round and phase
@@ -66,8 +75,17 @@ const Lobby = () => {
       socket.off("lobby-found");
       socket.off("game-started");
       socket.off("lobby-join-failed");
+      socket.off("chat-message");
     };
   }, []);
+
+  const handleSendMessage = () => {
+    if (chatInput.trim() === "") return; // Ignore empty messages
+
+    const message = chatInput.trim();
+    socket.emit("chat-message", { lobbyId: lobbyCode, message, sender: name }); // Send message to backend
+    setChatInput(""); // Clear input
+};
 
   const handleLeaveLobby = () => {
     console.log("🚪 Leaving lobby:", lobbyCode);
@@ -77,6 +95,8 @@ const Lobby = () => {
     setIsLobbyJoined(false); // Mark the user as not in a lobby
     setMode(null); // Reset the mode
     setIsLobbyFound(false); // Reset lobby found status
+    setChatInput(""); // Clear chat input
+    setMessages([]); // Clear chat messages
   };
 
   // --- CREATE ---
@@ -175,9 +195,7 @@ const Lobby = () => {
 
   // --- IN LOBBY ---
   if (isLobbyJoined) {
-    console.log("🎉 User is in the lobby");
     if (gameStarted) {
-      console.log("🎮 Game is in progress");
       return (
         <div className="game-container">
           <h2>Game in Progress</h2>
@@ -204,6 +222,27 @@ const Lobby = () => {
         </ul>
         <button onClick={handleLeaveLobby}>Leave Lobby</button> {/* Add this button */}
         {players.length > 1 && <button onClick={handleStartGame}>Start Game</button>}
+          
+        <div className="chat-box">
+          <h1>Chat</h1>
+        <div className="chat-messages">
+          {messages.map((msg, index) => (
+            <div key={index}>
+              <strong>{msg.sender}:</strong> {msg.message}
+            </div>
+          ))}
+        </div>
+        <div className="chat-input">
+          <input
+            type="text"
+            value={chatInput}
+            onChange={(e) => setChatInput(e.target.value)}
+            placeholder="Type a message..."
+          />
+          <button onClick={handleSendMessage}>Send</button>
+        </div>
+      </div>
+          
       </div>
     );}
   }
